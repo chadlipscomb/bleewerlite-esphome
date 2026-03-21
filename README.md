@@ -138,19 +138,20 @@ light:
 |-------|----------|-------------|------------------|--------|
 | GL1-Pro | Standard, CCT-only | Brightness + Color Temp (2900-7000K) | Random | Working. Slow BLE advertising (~5 min intervals). |
 | HS60C | Standard, RGB+CCT | Brightness + Color Temp + RGB + Effects | Public | Working. Fast advertising, reliable. |
+| HB80C | Infinity (mode 1), RGB+CCT | Brightness + Color Temp (2500-7500K) + RGB + Effects | Random | Working. Also accepts standard commands. |
 
 The component includes a specs database with 48 known Neewer models. Lights not in the database fall back to sensible defaults (3200-5600K, RGB+CCT, standard protocol). If your light works with [NeewerLite-Python](https://github.com/taburineagle/NeewerLite-Python), it should work here.
-
-Lights that use the Infinity protocol (mode 1) have not been tested yet. The protocol implementation is in place but unverified on real hardware.
 
 ### ESP32 Boards
 
 | Board | Status | Notes |
 |-------|--------|-------|
 | ESP32-S3-DevKitC-1 | Tested | Dual USB (JTAG + UART) is convenient for development. |
-| ESP32-WROOM | Should work | Not tested. Use `board: esp32dev` in config. |
-| ESP32-S2 | Should work | Not tested. Single USB. |
-| ESP32-C3 | Should work | Not tested. Single USB. |
+| ESP32-WROOM-32 | Tested | Use `board: esp32dev` in config. |
+| LilyGO T-Internet-POE | Tested | Ethernet + BLE. Single PoE cable, no WiFi/BLE contention. Use `board: esp32dev` with `ethernet:` config. |
+| ESP32-S2 | Should work | Not tested. |
+| ESP32-C3 | Should work | Not tested. |
+| ESP8266 (D1 Mini, etc.) | Not compatible | No BLE hardware. |
 
 Any ESP32 variant with BLE support should work. The firmware uses about 1.2MB flash and 50KB RAM with two lights configured.
 

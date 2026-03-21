@@ -10,6 +10,7 @@ __pycache__/
 # Secrets and dev configs
 secrets.yaml
 example.dev.yaml
+example.office.yaml
 
 # OS
 .DS_Store
