@@ -83,6 +83,7 @@ Three protocol variants determined per-light by `infinity_mode` from the light s
 |-------|----------|------------------|-------|
 | GL1-Pro | Standard, CCT-only (separate 0x82/0x83) | Random | Slow advertising (~5 min intervals) |
 | HS60C | Standard, RGB+CCT (0x87/0x86), effects via 0x8B | Public | Fast advertising, reliable |
+| HB80C | Infinity (mode 1), RGB+CCT | Random | Also accepts standard commands |
 
 ## Protocol Reference
 
