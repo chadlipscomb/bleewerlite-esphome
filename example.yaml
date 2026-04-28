@@ -1,5 +1,6 @@
 # Example ESPHome configuration for BLEewerLite
-# Adjust board, wifi, and MAC addresses for your setup.
+# Demonstrates a two-light setup with an HS60C (key light) and HB80C (fill light).
+# Replace MAC addresses with your own. See README for how to find them.
 
 esphome:
   name: bleewer-controller
@@ -37,22 +38,33 @@ esp32_ble_tracker:
     interval: 200ms
     window: 180ms
 
-# --- Single light example ---
 ble_client:
-  - mac_address: "AA:BB:CC:DD:EE:FF"  # Replace with your Neewer light's BLE MAC
-    id: neewer_light_1
+  # HS60C uses a public BLE address — easy to find with any BLE scanner
+  - mac_address: "AA:BB:CC:DD:EE:FF"
+    id: hs60c
+
+  # HB80C uses a random BLE address and advertises infrequently (~5 min intervals)
+  # Allow extra time for initial connection after boot
+  - mac_address: "11:22:33:44:55:66"
+    id: hb80c
+
+switch:
+  - platform: ble_client
+    ble_client_id: hs60c
+    name: "Key Light BLE"
+
+  - platform: ble_client
+    ble_client_id: hb80c
+    name: "Fill Light BLE"
 
 light:
+  # HS60C: hybrid CCT (mode 2), RGB+CCT, 2700-6700K — auto-detected from model_name
   - platform: bleewer_light
-    ble_client_id: neewer_light_1
-    name: "Neewer Key Light"
+    ble_client_id: hs60c
+    name: "Key Light"
+    model_name: "HS60C"
     default_transition_length: 0s  # CRITICAL: Neewer lights can't handle rapid BLE writes
-    # model_name: "GL1"          # Optional: match against light specs database
-    # color_temp_min: 2900       # Optional: Kelvin (auto-detected from model_name)
-    # color_temp_max: 7000
-    # cct_only: false            # Set true for CCT-only lights (no RGB)
-    # infinity_mode: 0           # 0=standard, 1=infinity, 2=hybrid
-    effects:                     # Optional: Neewer hardware animation effects
+    effects:
       - neewer_cop_car:
       - neewer_candlelight:
       - neewer_lightning:
@@ -60,24 +72,16 @@ light:
       - neewer_hue_loop:
       - neewer_fireworks:
 
-# --- Multi-light example (ESP32 supports up to ~3 concurrent BLE connections) ---
-# ble_client:
-#   - mac_address: "AA:BB:CC:DD:EE:FF"
-#     id: neewer_key_light
-#   - mac_address: "11:22:33:44:55:66"
-#     id: neewer_fill_light
-#
-# light:
-#   - platform: bleewer_light
-#     ble_client_id: neewer_key_light
-#     name: "Key Light"
-#     model_name: "GL1"
-#     default_transition_length: 0s
-#
-#   - platform: bleewer_light
-#     ble_client_id: neewer_fill_light
-#     name: "Fill Light"
-#     default_transition_length: 0s
-#     effects:
-#       - neewer_cop_car:
-#       - neewer_candlelight:
+  # HB80C: infinity protocol (mode 1), RGB+CCT, 2500-7500K — auto-detected from model_name
+  - platform: bleewer_light
+    ble_client_id: hb80c
+    name: "Fill Light"
+    model_name: "HB80C"
+    default_transition_length: 0s
+    effects:
+      - neewer_cop_car:
+      - neewer_candlelight:
+      - neewer_lightning:
+      - neewer_party:
+      - neewer_hue_loop:
+      - neewer_fireworks:
