@@ -25,6 +25,7 @@ static const LightSpecEntry LIGHT_SPECS_DB[] = {
     {"GL1C",       2900, 7000,  false, 1},
     {"GL1",        2900, 7000,  true,  0},
     {"HB80C",      2500, 7500,  false, 1},
+    {"HS60C",      2700, 6700,  false, 2},
     {"MS60B",      2700, 6500,  true,  1},
     {"NL140",      3200, 5600,  true,  0},
     {"RGB C80",    2500, 10000, false, 1},

@@ -82,7 +82,7 @@ Three protocol variants determined per-light by `infinity_mode` from the light s
 | Light | Protocol | BLE Address Type | Notes |
 |-------|----------|------------------|-------|
 | GL1-Pro | Standard, CCT-only (separate 0x82/0x83) | Random | Slow advertising (~5 min intervals) |
-| HS60C | Standard, RGB+CCT (0x87/0x86), effects via 0x8B | Public | Fast advertising, reliable |
+| HS60C | Hybrid (mode 2), RGB+CCT (0x87 with GM byte), effects via 0x8B | Public | Fast advertising; CCT requires 3-byte payload [bri, temp, gm] — omitting GM causes light to display wrong GM value |
 | HB80C | Infinity (mode 1), RGB+CCT | Random | Also accepts standard commands |
 
 ## Protocol Reference
@@ -98,7 +98,7 @@ Checksum: `sum(all_bytes_except_checksum) & 0xFF`
 | `0x82` | Brightness (old) | `[brightness]` | CCT-only lights only |
 | `0x83` | Color temp (old) | `[temp]` | CCT-only lights only |
 | `0x86` | HSI | `[hue_lo, hue_hi, sat, bri]` | RGB lights |
-| `0x87` | CCT | `[bri, temp]` | Standard RGB+CCT lights (mode 0, non-cct_only) |
+| `0x87` | CCT | `[bri, temp]` or `[bri, temp, gm+50]` | Mode 0: 2 bytes; mode 2 (hybrid): 3 bytes including GM offset |
 | `0x88` | ANM (legacy) | `[bri, fx_index]` | Very old lights only — requires FX index conversion |
 | `0x8B` | ANM/Scene | `[effect, ...params]` | **Use this for effects on all modern lights** (tested on HS60C) |
 
