@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overpass Query Builder</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background: #111827;
+  color: #e5e7eb;
+}
+
+/* ── Sidebar ── */
+#sidebar {
+  width: 400px;
+  min-width: 400px;
+  display: flex;
+  flex-direction: column;
+  background: #1f2937;
+  border-right: 1px solid #374151;
+  overflow: hidden;
+}
+
+.sidebar-header {
+  padding: 14px 16px;
+  background: #111827;
+  font-size: 15px;
+  font-weight: 700;
+  color: #f59e0b;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+  border-bottom: 1px solid #374151;
+}
+
+#sidebar-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+
+.section {
+  padding: 12px 14px;
+  border-bottom: 1px solid #374151;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #6b7280;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+/* ── Feature grid ── */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.feature-card {
+  padding: 8px 6px;
+  background: #111827;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+.feature-card:hover { border-color: #4b5563; }
+.feature-card.selected { border-color: #f59e0b; background: rgba(245,158,11,0.08); }
+.feature-card .icon { font-size: 20px; display: block; margin-bottom: 3px; line-height: 1; }
+.feature-card .label { font-size: 11px; color: #9ca3af; }
+.feature-card.selected .label { color: #f59e0b; }
+
+/* ── Shared form controls ── */
+select, input[type=number], input[type=text] {
+  background: #111827;
+  color: #e5e7eb;
+  border: 1px solid #374151;
+  border-radius: 5px;
+  padding: 5px 8px;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+select:focus, input:focus { border-color: #f59e0b; }
+
+/* ── Filter rows ── */
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 7px;
+  flex-wrap: wrap;
+}
+.filter-row select { min-width: 0; }
+.filter-row .key-select { flex: 1 1 120px; }
+.filter-row .op-select { width: 52px; flex-shrink: 0; }
+.filter-row .val-input { width: 68px; flex-shrink: 0; }
+.filter-row .val-select { flex: 1 1 80px; }
+.muted { color: #6b7280; font-size: 12px; flex-shrink: 0; }
+
+.remove-btn {
+  background: none;
+  border: none;
+  color: #4b5563;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.remove-btn:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+
+.add-btn {
+  display: block;
+  width: 100%;
+  padding: 6px;
+  background: transparent;
+  border: 1px dashed #374151;
+  border-radius: 5px;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: center;
+  margin-top: 4px;
+  transition: all 0.15s;
+}
+.add-btn:hover { border-color: #f59e0b; color: #f59e0b; }
+
+/* ── Area section ── */
+.area-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+.draw-btn {
+  flex: 1;
+  padding: 6px 10px;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 5px;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: center;
+  transition: all 0.15s;
+}
+.draw-btn:hover { border-color: #10b981; color: #10b981; }
+.draw-btn.active { border-color: #10b981; background: rgba(16,185,129,0.08); color: #10b981; }
+.clear-btn {
+  padding: 6px 10px;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 5px;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 12px;
+}
+.clear-btn:hover { border-color: #ef4444; color: #ef4444; }
+.or-divider { text-align: center; color: #4b5563; font-size: 11px; margin: 6px 0; }
+#bbox-status {
+  font-size: 11px;
+  font-family: monospace;
+  color: #4b5563;
+  margin-top: 4px;
+}
+#bbox-status.set { color: #10b981; }
+
+/* ── Query output ── */
+#query-pre {
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  background: #0d1117;
+  border: 1px solid #374151;
+  border-radius: 5px;
+  padding: 10px;
+  color: #7dd3fc;
+  white-space: pre;
+  overflow-x: auto;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+.query-actions { display: flex; gap: 6px; }
+.q-btn {
+  padding: 6px 12px;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 5px;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+.q-btn:hover { border-color: #f59e0b; color: #f59e0b; }
+
+/* ── Run button ── */
+#run-btn {
+  margin: 10px 14px;
+  padding: 11px;
+  background: #f59e0b;
+  border: none;
+  border-radius: 6px;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+#run-btn:hover { background: #d97706; }
+#run-btn:disabled { background: #374151; color: #6b7280; cursor: not-allowed; }
+
+/* ── Map ── */
+#main {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+#map { width: 100%; height: 100%; }
+
+#status-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(17,24,39,0.92);
+  backdrop-filter: blur(4px);
+  padding: 7px 14px;
+  font-size: 12px;
+  color: #6b7280;
+  border-top: 1px solid #374151;
+  z-index: 1000;
+}
+#status-bar.loading { color: #f59e0b; }
+#status-bar.success { color: #10b981; }
+#status-bar.error   { color: #ef4444; }
+
+/* Scrollbar */
+#sidebar-scroll::-webkit-scrollbar { width: 5px; }
+#sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+#sidebar-scroll::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="sidebar-header">⬡ Overpass Query Builder</div>
+
+  <div id="sidebar-scroll">
+
+    <!-- FIND -->
+    <div class="section">
+      <div class="section-label">Find</div>
+      <div class="feature-grid" id="feature-grid"></div>
+    </div>
+
+    <!-- WHERE: attribute filters -->
+    <div class="section">
+      <div class="section-label">Where (attributes)</div>
+      <div id="attr-filters"></div>
+      <button class="add-btn" onclick="addAttrFilter()">+ Add attribute condition</button>
+    </div>
+
+    <!-- NEAR: spatial/proximity filters -->
+    <div class="section">
+      <div class="section-label">Near (proximity)</div>
+      <div id="spatial-filters"></div>
+      <button class="add-btn" onclick="addSpatialFilter()">+ Add proximity rule</button>
+    </div>
+
+    <!-- AREA -->
+    <div class="section">
+      <div class="section-label">Area</div>
+      <div class="area-row">
+        <button class="draw-btn" id="draw-btn" onclick="toggleDraw()">⬜ Draw bounding box on map</button>
+        <button class="clear-btn" onclick="clearBbox()">✕</button>
+      </div>
+      <div id="bbox-status">No area selected</div>
+      <div class="or-divider">— or named area —</div>
+      <div class="area-row">
+        <input type="text" id="area-name" placeholder="e.g. Austin, Texas" style="flex:1"
+          oninput="updateQuery()">
+      </div>
+    </div>
+
+    <!-- OPTIONS -->
+    <div class="section">
+      <div class="section-label">Options</div>
+      <div class="filter-row">
+        <span class="muted">Timeout</span>
+        <input type="number" id="opt-timeout" value="60" min="5" max="300" style="width:60px" oninput="updateQuery()">
+        <span class="muted">s &nbsp; Max results</span>
+        <input type="number" id="opt-limit" value="500" min="1" max="10000" style="width:72px" oninput="updateQuery()">
+      </div>
+    </div>
+
+    <!-- GENERATED QUERY -->
+    <div class="section">
+      <div class="section-label">Generated Query</div>
+      <pre id="query-pre"></pre>
+      <div class="query-actions">
+        <button class="q-btn" onclick="copyQuery()">Copy</button>
+        <button class="q-btn" onclick="openInTurbo()">Open in Overpass Turbo ↗</button>
+      </div>
+    </div>
+
+  </div><!-- /sidebar-scroll -->
+
+  <button id="run-btn" onclick="runQuery()">▶ Run Query</button>
+</div>
+
+<div id="main">
+  <div id="map"></div>
+  <div id="status-bar">Select a feature type, add conditions, draw an area, then run.</div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// Data
+// ─────────────────────────────────────────────────────────────────────────────
+
+const FEATURES = [
+  { id: 'house',        icon: '🏠', label: 'Houses',       tags: [['building','house']],        types: ['way','relation'] },
+  { id: 'apartments',   icon: '🏢', label: 'Apartments',   tags: [['building','apartments']],   types: ['way','relation'] },
+  { id: 'commercial',   icon: '🏪', label: 'Commercial',   tags: [['building','commercial']],   types: ['way','relation'] },
+  { id: 'any_building', icon: '🏗',  label: 'Any Building', tags: [['building']],               types: ['way','relation'] },
+  { id: 'school',       icon: '🏫', label: 'Schools',      tags: [['amenity','school']],        types: ['node','way','relation'] },
+  { id: 'hospital',     icon: '🏥', label: 'Hospitals',    tags: [['amenity','hospital']],      types: ['node','way','relation'] },
+  { id: 'restaurant',   icon: '🍽',  label: 'Restaurants',  tags: [['amenity','restaurant']],    types: ['node','way'] },
+  { id: 'cafe',         icon: '☕', label: 'Cafes',        tags: [['amenity','cafe']],          types: ['node','way'] },
+  { id: 'park',         icon: '🌳', label: 'Parks',        tags: [['leisure','park']],          types: ['way','relation'] },
+  { id: 'river',        icon: '🏞',  label: 'Rivers',       tags: [['waterway','river']],        types: ['way','relation'] },
+  { id: 'forest',       icon: '🌲', label: 'Forests',      tags: [['natural','wood']],          types: ['way','relation'] },
+  { id: 'road',         icon: '🛣',  label: 'Roads',        tags: [['highway']],                types: ['way'] },
+  { id: 'bus_stop',     icon: '🚌', label: 'Bus Stops',    tags: [['highway','bus_stop']],      types: ['node'] },
+  { id: 'supermarket',  icon: '🛒', label: 'Supermarkets', tags: [['shop','supermarket']],      types: ['node','way'] },
+  { id: 'church',       icon: '⛪', label: 'Churches',     tags: [['amenity','place_of_worship'],['religion','christian']], types: ['node','way','relation'] },
+];
+
+const ATTR_DEFS = [
+  { key: 'building:levels', label: 'Number of floors',  type: 'number', ops: ['>=','>','=','<','<='] },
+  { key: 'height',           label: 'Height (m)',         type: 'number', ops: ['>=','>','=','<','<='] },
+  { key: 'start_date',       label: 'Year built',         type: 'number', ops: ['>=','>','=','<','<='] },
+  { key: 'lanes',            label: 'Number of lanes',    type: 'number', ops: ['>=','>','=','<','<='] },
+  { key: 'maxspeed',         label: 'Speed limit (km/h)', type: 'number', ops: ['>=','>','=','<','<='] },
+  { key: 'name',             label: 'Has a name',         type: 'exists' },
+  { key: 'addr:street',      label: 'Has street address', type: 'exists' },
+  { key: 'wheelchair',       label: 'Wheelchair access',  type: 'select', opts: ['yes','no','limited'] },
+  { key: 'access',           label: 'Access',             type: 'select', opts: ['yes','no','private','permissive','designated'] },
+  { key: 'building:material',label: 'Building material',  type: 'select', opts: ['brick','concrete','wood','stone','glass','metal'] },
+  { key: 'roof:shape',       label: 'Roof shape',         type: 'select', opts: ['flat','gabled','hipped','pyramidal','dome'] },
+  { key: 'surface',          label: 'Surface',            type: 'select', opts: ['asphalt','concrete','gravel','dirt','grass','cobblestone','paved','unpaved'] },
+  { key: 'operator',         label: 'Operator name',      type: 'text' },
+];
+
+const PROX_TARGETS = [
+  { id: 'school',       label: 'School',       tags: [['amenity','school']],         types: ['node','way','relation'] },
+  { id: 'hospital',     label: 'Hospital',     tags: [['amenity','hospital']],       types: ['node','way','relation'] },
+  { id: 'park',         label: 'Park',         tags: [['leisure','park']],           types: ['way','relation'] },
+  { id: 'river',        label: 'River',        tags: [['waterway','river']],         types: ['way','relation'] },
+  { id: 'stream',       label: 'Stream',       tags: [['waterway','stream']],        types: ['way'] },
+  { id: 'lake',         label: 'Lake / Water', tags: [['natural','water']],          types: ['way','relation'] },
+  { id: 'forest',       label: 'Forest',       tags: [['natural','wood']],           types: ['way','relation'] },
+  { id: 'coastline',    label: 'Coastline',    tags: [['natural','coastline']],      types: ['way'] },
+  { id: 'motorway',     label: 'Motorway',     tags: [['highway','motorway']],       types: ['way'] },
+  { id: 'primary_road', label: 'Major Road',   tags: [['highway','primary']],        types: ['way'] },
+  { id: 'railway',      label: 'Railway',      tags: [['railway','rail']],           types: ['way'] },
+  { id: 'bus_stop',     label: 'Bus Stop',     tags: [['highway','bus_stop']],       types: ['node'] },
+  { id: 'supermarket',  label: 'Supermarket',  tags: [['shop','supermarket']],       types: ['node','way'] },
+  { id: 'restaurant',   label: 'Restaurant',   tags: [['amenity','restaurant']],     types: ['node','way'] },
+  { id: 'church',       label: 'Church',       tags: [['amenity','place_of_worship']],types: ['node','way','relation'] },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────────────
+
+let state = {
+  featureId: 'house',
+  attrFilters: [],    // { id, key, op, value }
+  spatialFilters: [], // { id, targetId, distance, unit }
+  bbox: null,
+};
+let nextId = 1;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Map
+// ─────────────────────────────────────────────────────────────────────────────
+
+const map = L.map('map').setView([39, -98], 4);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  maxZoom: 19,
+}).addTo(map);
+
+let bboxRect = null;
+let resultsLayer = null;
+let drawing = false;
+let drawOrigin = null;
+
+map.on('mousedown', (e) => {
+  if (!drawing) return;
+  drawOrigin = e.latlng;
+  if (bboxRect) { map.removeLayer(bboxRect); bboxRect = null; }
+  map.dragging.disable();
+});
+
+map.on('mousemove', (e) => {
+  if (!drawing || !drawOrigin) return;
+  if (bboxRect) map.removeLayer(bboxRect);
+  bboxRect = L.rectangle(L.latLngBounds(drawOrigin, e.latlng), {
+    color: '#10b981', weight: 2, dashArray: '5 4', fillOpacity: 0.08
+  }).addTo(map);
+});
+
+map.on('mouseup', (e) => {
+  if (!drawing || !drawOrigin) return;
+  map.dragging.enable();
+  const bounds = L.latLngBounds(drawOrigin, e.latlng);
+  if (bounds.getNorth() === bounds.getSouth()) { drawOrigin = null; return; }
+  state.bbox = bounds;
+  drawOrigin = null;
+  toggleDraw(false);
+  updateBboxStatus();
+  updateQuery();
+});
+
+function toggleDraw(force) {
+  drawing = (force !== undefined) ? force : !drawing;
+  const btn = document.getElementById('draw-btn');
+  btn.classList.toggle('active', drawing);
+  map.getContainer().style.cursor = drawing ? 'crosshair' : '';
+  if (!drawing) map.dragging.enable();
+}
+
+function clearBbox() {
+  if (bboxRect) { map.removeLayer(bboxRect); bboxRect = null; }
+  state.bbox = null;
+  updateBboxStatus();
+  updateQuery();
+}
+
+function updateBboxStatus() {
+  const el = document.getElementById('bbox-status');
+  if (state.bbox) {
+    const b = state.bbox;
+    el.textContent = `${b.getSouth().toFixed(4)}, ${b.getWest().toFixed(4)}, ${b.getNorth().toFixed(4)}, ${b.getEast().toFixed(4)}`;
+    el.className = 'set';
+  } else {
+    el.textContent = 'No area selected';
+    el.className = '';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature grid
+// ─────────────────────────────────────────────────────────────────────────────
+
+function renderFeatureGrid() {
+  document.getElementById('feature-grid').innerHTML = FEATURES.map(f => `
+    <div class="feature-card ${f.id === state.featureId ? 'selected' : ''}"
+         onclick="selectFeature('${f.id}')">
+      <span class="icon">${f.icon}</span>
+      <span class="label">${f.label}</span>
+    </div>`).join('');
+}
+
+function selectFeature(id) {
+  state.featureId = id;
+  renderFeatureGrid();
+  updateQuery();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Attribute filters
+// ─────────────────────────────────────────────────────────────────────────────
+
+function addAttrFilter() {
+  const def = ATTR_DEFS[0];
+  state.attrFilters.push({
+    id: nextId++,
+    key: def.key,
+    op: def.ops ? def.ops[0] : null,
+    value: def.type === 'number' ? '3' : (def.opts ? def.opts[0] : ''),
+  });
+  renderAttrFilters();
+  updateQuery();
+}
+
+function renderAttrFilters() {
+  document.getElementById('attr-filters').innerHTML =
+    state.attrFilters.map(f => {
+      const def = ATTR_DEFS.find(d => d.key === f.key);
+      return `<div class="filter-row">
+        <select class="key-select" onchange="setAttrKey(${f.id},this.value)">
+          ${ATTR_DEFS.map(d =>
+            `<option value="${d.key}"${d.key===f.key?' selected':''}>${d.label}</option>`
+          ).join('')}
+        </select>
+        ${renderAttrControl(f, def)}
+        <button class="remove-btn" onclick="removeAttrFilter(${f.id})">✕</button>
+      </div>`;
+    }).join('');
+}
+
+function renderAttrControl(f, def) {
+  if (!def) return '';
+  if (def.type === 'exists') {
+    return `<span class="muted" style="padding:0 4px">exists on map</span>`;
+  }
+  if (def.type === 'number') {
+    return `
+      <select class="op-select" onchange="setAttrOp(${f.id},this.value)">
+        ${def.ops.map(o => `<option${o===f.op?' selected':''}>${o}</option>`).join('')}
+      </select>
+      <input type="number" class="val-input" value="${f.value}"
+        onchange="setAttrVal(${f.id},this.value)">`;
+  }
+  if (def.type === 'select') {
+    return `<span class="muted">=</span>
+      <select class="val-select" onchange="setAttrVal(${f.id},this.value)">
+        ${def.opts.map(o => `<option${o===f.value?' selected':''}>${o}</option>`).join('')}
+      </select>`;
+  }
+  if (def.type === 'text') {
+    return `<span class="muted">contains</span>
+      <input type="text" class="val-input" value="${f.value}" style="width:110px"
+        oninput="setAttrVal(${f.id},this.value)" placeholder="value">`;
+  }
+  return '';
+}
+
+function setAttrKey(id, key) {
+  const f = state.attrFilters.find(x => x.id === id);
+  const def = ATTR_DEFS.find(d => d.key === key);
+  f.key = key;
+  f.op = def.ops ? def.ops[0] : null;
+  f.value = def.type === 'number' ? '3' : (def.opts ? def.opts[0] : '');
+  renderAttrFilters();
+  updateQuery();
+}
+
+function setAttrOp(id, op) {
+  state.attrFilters.find(x => x.id === id).op = op;
+  updateQuery();
+}
+
+function setAttrVal(id, val) {
+  state.attrFilters.find(x => x.id === id).value = val;
+  updateQuery();
+}
+
+function removeAttrFilter(id) {
+  state.attrFilters = state.attrFilters.filter(x => x.id !== id);
+  renderAttrFilters();
+  updateQuery();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Spatial/proximity filters
+// ─────────────────────────────────────────────────────────────────────────────
+
+function addSpatialFilter() {
+  state.spatialFilters.push({
+    id: nextId++,
+    targetId: 'school',
+    distance: 0.5,
+    unit: 'miles',
+  });
+  renderSpatialFilters();
+  updateQuery();
+}
+
+function renderSpatialFilters() {
+  document.getElementById('spatial-filters').innerHTML =
+    state.spatialFilters.map(f => `
+      <div class="filter-row">
+        <span class="muted">Within</span>
+        <input type="number" min="0.01" step="0.1" value="${f.distance}" style="width:58px"
+          onchange="setSpatial(${f.id},'distance',this.value)">
+        <select style="width:62px" onchange="setSpatial(${f.id},'unit',this.value)">
+          <option${f.unit==='miles'?' selected':''}>miles</option>
+          <option${f.unit==='km'?' selected':''}>km</option>
+          <option${f.unit==='m'?' selected':''}>m</option>
+        </select>
+        <span class="muted">of</span>
+        <select style="flex:1;min-width:0" onchange="setSpatial(${f.id},'targetId',this.value)">
+          ${PROX_TARGETS.map(t =>
+            `<option value="${t.id}"${t.id===f.targetId?' selected':''}>${t.label}</option>`
+          ).join('')}
+        </select>
+        <button class="remove-btn" onclick="removeSpatialFilter(${f.id})">✕</button>
+      </div>`).join('');
+}
+
+function setSpatial(id, field, value) {
+  const f = state.spatialFilters.find(x => x.id === id);
+  f[field] = field === 'distance' ? parseFloat(value) : value;
+  updateQuery();
+}
+
+function removeSpatialFilter(id) {
+  state.spatialFilters = state.spatialFilters.filter(x => x.id !== id);
+  renderSpatialFilters();
+  updateQuery();
+}
+
+function toMeters(dist, unit) {
+  if (unit === 'miles') return Math.round(dist * 1609.344);
+  if (unit === 'km')    return Math.round(dist * 1000);
+  return Math.round(dist);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Query generation
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildQuery() {
+  const feature  = FEATURES.find(f => f.id === state.featureId);
+  const timeout  = document.getElementById('opt-timeout').value || 60;
+  const limit    = document.getElementById('opt-limit').value || 500;
+  const areaName = document.getElementById('area-name').value.trim();
+
+  // Bounding box string
+  let bboxStr = '{{bbox}}';
+  if (state.bbox) {
+    const b = state.bbox;
+    bboxStr = `${b.getSouth().toFixed(6)},${b.getWest().toFixed(6)},${b.getNorth().toFixed(6)},${b.getEast().toFixed(6)}`;
+  }
+
+  const useNamedArea = areaName && !state.bbox;
+
+  const L = []; // output lines
+  L.push(`[out:json][timeout:${timeout}];`);
+
+  // Named area setup
+  if (useNamedArea) {
+    L.push(`area["name"="${areaName}"]->.searchArea;`);
+  }
+  L.push('');
+
+  // ── Proximity target named sets ──
+  state.spatialFilters.forEach((sf, i) => {
+    const target = PROX_TARGETS.find(t => t.id === sf.targetId);
+    const areaFilter = useNamedArea ? `(area.searchArea)` : `(${bboxStr})`;
+    L.push(`// ${target.label}s within search area`);
+    L.push(`(`);
+    target.types.forEach(type => {
+      const tagStr = target.tags.map(([k,v]) => v ? `["${k}"="${v}"]` : `["${k}"]`).join('');
+      L.push(`  ${type}${tagStr}${areaFilter};`);
+    });
+    L.push(`)->.prox_${i};`);
+    L.push('');
+  });
+
+  // ── Main feature tags ──
+  const mainTags = feature.tags.map(([k,v]) => v ? `["${k}"="${v}"]` : `["${k}"]`).join('');
+
+  // ── Attribute filters ──
+  // Tag-based (exact/select/exists)
+  const tagFilters = state.attrFilters
+    .filter(f => {
+      const def = ATTR_DEFS.find(d => d.key === f.key);
+      return def && (def.type === 'exists' || def.type === 'select' || def.type === 'text');
+    })
+    .map(f => {
+      const def = ATTR_DEFS.find(d => d.key === f.key);
+      if (def.type === 'exists') return `["${f.key}"]`;
+      if (def.type === 'text')   return `["${f.key}"~"${f.value}",i]`;
+      return `["${f.key}"="${f.value}"]`;
+    }).join('');
+
+  // Numeric filters → (if:) evaluator
+  const numericParts = state.attrFilters
+    .filter(f => ATTR_DEFS.find(d => d.key === f.key)?.type === 'number')
+    .map(f => `number(t["${f.key}"]) ${f.op} ${f.value}`);
+  const ifClause = numericParts.length ? `(if: ${numericParts.join(' && ')})` : '';
+
+  const areaFilter = useNamedArea ? `(area.searchArea)` : `(${bboxStr})`;
+
+  // ── Build main query, chaining proximity sets ──
+  const comment = buildComment(feature, state.attrFilters, state.spatialFilters);
+  if (comment) { L.push(`// ${comment}`); }
+
+  if (state.spatialFilters.length === 0) {
+    L.push('(');
+    feature.types.forEach(type => {
+      L.push(`  ${type}${mainTags}${tagFilters}${ifClause}${areaFilter};`);
+    });
+    L.push(')->.results;');
+  } else {
+    // First pass: near prox_0
+    L.push('(');
+    feature.types.forEach(type => {
+      L.push(`  ${type}${mainTags}${tagFilters}${ifClause}(around.prox_0:${toMeters(state.spatialFilters[0].distance, state.spatialFilters[0].unit)})${areaFilter};`);
+    });
+    if (state.spatialFilters.length === 1) {
+      L.push(')->.results;');
+    } else {
+      L.push(`)->.step_0;`);
+      // Chain subsequent proximity sets through set membership
+      for (let i = 1; i < state.spatialFilters.length; i++) {
+        const sf = state.spatialFilters[i];
+        const prevSet = i === 1 ? 'step_0' : `step_${i-1}`;
+        const nextSet = i === state.spatialFilters.length - 1 ? 'results' : `step_${i}`;
+        L.push('');
+        L.push('(');
+        feature.types.forEach(type => {
+          L.push(`  ${type}.${prevSet}(around.prox_${i}:${toMeters(sf.distance, sf.unit)});`);
+        });
+        L.push(`)->.${nextSet};`);
+      }
+    }
+  }
+
+  L.push('');
+  L.push(`// Output`);
+  L.push(`.results out body ${limit};`);
+  L.push(`>;`);
+  L.push(`out skel qt;`);
+
+  return L.join('\n');
+}
+
+function buildComment(feature, attrFilters, spatialFilters) {
+  const parts = [feature.label.toLowerCase()];
+  attrFilters.forEach(f => {
+    const def = ATTR_DEFS.find(d => d.key === f.key);
+    if (!def) return;
+    if (def.type === 'exists') parts.push(`with ${def.label.toLowerCase()}`);
+    else if (def.type === 'number') parts.push(`${def.label.toLowerCase()} ${f.op} ${f.value}`);
+    else parts.push(`${def.label.toLowerCase()} = ${f.value}`);
+  });
+  spatialFilters.forEach(sf => {
+    const t = PROX_TARGETS.find(x => x.id === sf.targetId);
+    if (t) parts.push(`within ${sf.distance} ${sf.unit} of ${t.label.toLowerCase()}`);
+  });
+  return parts.length > 1 ? parts.join(', ') : '';
+}
+
+function updateQuery() {
+  document.getElementById('query-pre').textContent = buildQuery();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Query actions
+// ─────────────────────────────────────────────────────────────────────────────
+
+function copyQuery() {
+  navigator.clipboard.writeText(buildQuery()).then(() => setStatus('Copied to clipboard', 'success'));
+}
+
+function openInTurbo() {
+  const q = encodeURIComponent(buildQuery());
+  window.open(`https://overpass-turbo.eu/?Q=${q}&R=1`, '_blank');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Run query against Overpass API
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function runQuery() {
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Running…';
+  setStatus('Sending query to Overpass API…', 'loading');
+
+  if (resultsLayer) { map.removeLayer(resultsLayer); resultsLayer = null; }
+
+  try {
+    const resp = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(buildQuery()),
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error(txt.match(/\/remark>(.*?)<\/remark>/)?.[1]?.trim() || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    displayResults(data);
+  } catch (e) {
+    setStatus(`Error: ${e.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶ Run Query';
+  }
+}
+
+function displayResults(data) {
+  const elements = data.elements || [];
+  if (!elements.length) { setStatus('No results found — try expanding the area or loosening conditions', 'error'); return; }
+
+  // Index nodes for way geometry reconstruction
+  const nodeById = {};
+  elements.filter(e => e.type === 'node').forEach(n => { nodeById[n.id] = n; });
+
+  const features = [];
+
+  elements.forEach(el => {
+    if (el.type === 'node') {
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [el.lon, el.lat] },
+        properties: el.tags || {},
+      });
+    } else if (el.type === 'way' && el.nodes) {
+      const coords = el.nodes.map(nid => {
+        const n = nodeById[nid];
+        return n ? [n.lon, n.lat] : null;
+      }).filter(Boolean);
+      if (coords.length > 1) {
+        const closed = el.nodes[0] === el.nodes[el.nodes.length - 1];
+        features.push({
+          type: 'Feature',
+          geometry: closed
+            ? { type: 'Polygon', coordinates: [coords] }
+            : { type: 'LineString', coordinates: coords },
+          properties: el.tags || {},
+        });
+      }
+    }
+  });
+
+  resultsLayer = L.geoJSON({ type: 'FeatureCollection', features }, {
+    style: { color: '#f59e0b', weight: 2, fillColor: '#f59e0b', fillOpacity: 0.15 },
+    pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+      radius: 6, color: '#f59e0b', fillColor: '#fbbf24',
+      fillOpacity: 0.9, weight: 2,
+    }),
+    onEachFeature: (feature, layer) => {
+      const tags = feature.properties || {};
+      const name = tags.name || tags['addr:housenumber']
+        ? `${tags['addr:housenumber'] || ''} ${tags['addr:street'] || ''}`.trim()
+        : '(unnamed)';
+      const rows = Object.entries(tags).slice(0, 10)
+        .map(([k, v]) => `<tr><td style="color:#6b7280;padding-right:8px">${k}</td><td>${v}</td></tr>`)
+        .join('');
+      layer.bindPopup(
+        `<b style="color:#f59e0b">${tags.name || name}</b>
+         <table style="font-size:12px;margin-top:6px;border-collapse:collapse">${rows}</table>`
+      );
+    },
+  }).addTo(map);
+
+  const bounds = resultsLayer.getBounds();
+  if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
+
+  const ways = elements.filter(e => e.type === 'way').length;
+  const nodes = elements.filter(e => e.type === 'node').length;
+  const rels = elements.filter(e => e.type === 'relation').length;
+  setStatus(`${elements.length} results  ·  ${ways} ways  ·  ${nodes} nodes  ·  ${rels} relations`, 'success');
+}
+
+function setStatus(msg, type) {
+  const bar = document.getElementById('status-bar');
+  bar.textContent = msg;
+  bar.className = type || '';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────────────────────────────────────
+
+renderFeatureGrid();
+updateQuery();
+</script>
+</body>
+</html>
