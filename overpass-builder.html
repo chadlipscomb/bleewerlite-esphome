@@ -810,10 +810,12 @@ function displayResults(data) {
 
   elements.forEach(el => {
     if (el.type === 'node') {
+      // Skip geometry-only nodes (no tags) — they exist only to reconstruct way shapes
+      if (!el.tags || Object.keys(el.tags).length === 0) return;
       features.push({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [el.lon, el.lat] },
-        properties: el.tags || {},
+        properties: el.tags,
       });
     } else if (el.type === 'way' && el.nodes) {
       const coords = el.nodes.map(nid => {
@@ -841,15 +843,18 @@ function displayResults(data) {
     }),
     onEachFeature: (feature, layer) => {
       const tags = feature.properties || {};
-      const name = tags.name || tags['addr:housenumber']
-        ? `${tags['addr:housenumber'] || ''} ${tags['addr:street'] || ''}`.trim()
-        : '(unnamed)';
-      const rows = Object.entries(tags).slice(0, 10)
-        .map(([k, v]) => `<tr><td style="color:#6b7280;padding-right:8px">${k}</td><td>${v}</td></tr>`)
-        .join('');
+      const name = tags.name
+        || (`${tags['addr:housenumber'] || ''} ${tags['addr:street'] || ''}`.trim())
+        || '(unnamed)';
+      const rows = Object.entries(tags).length
+        ? Object.entries(tags).slice(0, 12)
+            .map(([k, v]) => `<tr><td style="color:#6b7280;padding-right:10px;white-space:nowrap;vertical-align:top">${k}</td><td>${v}</td></tr>`)
+            .join('')
+        : '<tr><td style="color:#6b7280">No tags</td></tr>';
       layer.bindPopup(
-        `<b style="color:#f59e0b">${tags.name || name}</b>
-         <table style="font-size:12px;margin-top:6px;border-collapse:collapse">${rows}</table>`
+        `<b style="color:#f59e0b">${name}</b>
+         <table style="font-size:12px;margin-top:6px;border-collapse:collapse;min-width:180px">${rows}</table>`,
+        { maxWidth: 320 }
       );
     },
   }).addTo(map);
